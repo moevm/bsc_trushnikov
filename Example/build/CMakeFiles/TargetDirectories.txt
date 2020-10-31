@@ -1,0 +1,3 @@
+/home/anderson/pcl/pcd_write/build/CMakeFiles/rebuild_cache.dir
+/home/anderson/pcl/pcd_write/build/CMakeFiles/cloud_viewer.dir
+/home/anderson/pcl/pcd_write/build/CMakeFiles/edit_cache.dir
