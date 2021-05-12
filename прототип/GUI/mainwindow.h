@@ -40,7 +40,6 @@ public:
 private slots:
     void openFile();
     void saveFile();
-    void simplifyFirstMethod(int);
     void simplifySecondMethod();
     void showRMSEWindow();
 
@@ -92,7 +91,7 @@ private:
     void showPointCloud(size_t &);
     void addtreeWidgeSourcetItem(QString &, QString &, QString &);
     void addtreeWidgeTargetItem(size_t &, QTreeWidgetItem *);
-    void simplifyPC(int);
+    void simplifyPC();
 
 };
 #endif // MAINWINDOW_H

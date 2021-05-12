@@ -4,8 +4,34 @@ from scipy.spatial import distance
 import time
 from pykdtree.kdtree import KDTree
 import math
+from progress.bar import IncrementalBar
 from progress.bar import Bar
 
+def getNeighbors(all_p, points, k, print_, e_points=None):
+    tree = KDTree(all_p)
+    if points.ndim == 1:
+        points = np.array([points])
+    dist, neighbors = tree.query(points, k=k)
+
+    if neighbors.shape[0] == 1 and neighbors.ndim == 2:
+        neighbors = neighbors[0]
+
+    masks = []
+    if neighbors.ndim > 1:
+        neighbors = neighbors[:, :][:, 1:k]
+
+        if print_:
+            print(neighbors, '\n')
+
+        if e_points is not None:
+            masks = np.isin(neighbors, e_points, invert=True)
+            return np.array(neighbors), np.asarray(masks)
+    else:
+        neighbors = neighbors[1:k]
+        if e_points is not None:
+            masks.append(np.isin(neighbors, e_points, invert=True))
+            return np.array(neighbors), np.asarray(masks)
+    return np.array(neighbors)
 
 def detect_edge_points(all_p, k1, k2):
     neighbors_idx_1 = getNeighbors(all_p, all_p, k1, False)
@@ -55,31 +81,46 @@ def detect_edge_points(all_p, k1, k2):
     return np.array(e_points), np.array(n_e_points)
 
 
-def getNeighbors(all_p, points, k, print_, e_points=None):
-    tree = KDTree(all_p)
+def divide(X, p_thres, range_):
+    delta = 1e-10
+    range_[:, 0] = range_[:, 0] - delta
+    range_[:, 1] = range_[:, 1] + delta
+    p = (X[:, 0] > range_[0, 0]) & (X[:, 0] < range_[0, 1]) & (X[:, 1] > range_[1, 0]) & (
+            X[:, 1] < range_[1, 1]) & (X[:, 2] > range_[2, 0]) & (X[:, 2] < range_[2, 1])
+    Y = X[p, :]
+    n = Y.shape[0]
 
-    if points.ndim == 1:
-        points = np.array([points])
-    dist, neighbors = tree.query(points, k=k)
-    if neighbors.shape[0] == 1 and neighbors.ndim == 2:
-        neighbors = neighbors[0]
+    GRID_NUM = round(n / p_thres)
+    VOLUMN = np.prod(range_[:, 1] - range_[:, 0])
+    GRID_LEN = np.cbrt(VOLUMN / GRID_NUM)
+    GRID_NUM = np.ceil((range_[:, 1] - range_[:, 0]) / GRID_LEN).astype(int)
+    GRID_LEN = (range_[:, 1] - range_[:, 0]) / GRID_NUM
 
-    masks = []
-    if neighbors.ndim > 1:
-        neighbors = neighbors[:, :][:, 1:k]
+    grid_len = 0
+    grid_range = []
+    grid_X = []
 
-        if print_:
-            print(neighbors, '\n')
+    for i in range(1, GRID_NUM[0] + 1):
+        x_min = range_[0, 0] + GRID_LEN[0] * (i - 1)
+        x_max = range_[0, 0] + GRID_LEN[0] * i
+        GRID_DELTA = GRID_LEN[0] * 0.1
+        tmpi = X[(X[:, 0] > (x_min - GRID_DELTA)) & (X[:, 0] < (x_max + GRID_DELTA))]
+        for j in range(1, GRID_NUM[1] + 1):
+            y_min = range_[1, 0] + GRID_LEN[1] * (j - 1)
+            y_max = range_[1, 0] + GRID_LEN[1] * j
+            GRID_DELTA = GRID_LEN[1] * 0.1
+            tmpj = tmpi[(tmpi[:, 1] > (y_min - GRID_DELTA)) & (tmpi[:, 1] < (y_max + GRID_DELTA))]
+            for k in range(1, GRID_NUM[2] + 1):
+                z_min = range_[2, 0] + GRID_LEN[2] * (k - 1)
+                z_max = range_[2, 0] + GRID_LEN[2] * k
+                GRID_DELTA = GRID_LEN[2] * 0.1
+                tmpk = tmpj[(tmpj[:, 2] > (z_min - GRID_DELTA)) & (tmpj[:, 2] < (z_max + GRID_DELTA))]
 
-        if e_points is not None:
-            masks = np.isin(neighbors, e_points, invert=True)
-            return np.array(neighbors), np.asarray(masks)
-    else:
-        neighbors = neighbors[1:k]
-        if e_points is not None:
-            masks.append(np.isin(neighbors, e_points, invert=True))
-            return np.array(neighbors), np.asarray(masks)
-    return np.array(neighbors)
+                if tmpk.shape[0]:
+                    grid_X.append(tmpk)
+                    grid_range.append([x_min, x_max, y_min, y_max, z_min, z_max])
+                    grid_len += 1
+    return [grid_X, grid_range, grid_len]
 
 
 def getNormals(all_p, k, points=None):
@@ -93,50 +134,35 @@ def getNormals(all_p, k, points=None):
         return normals
 
 
-def simplify(pcd, percent):
-    t = time.time()
+def simplify_cube(points, n_e_points,e_points, range_):
+    if n_e_points.shape[0] <= 2:
+        return points
+
+    target = int(math.ceil((n_e_points.shape[0] * 4) / 100))
+    if target == 0:
+        target +=1
     k = 10
-    points = np.asarray(pcd.points)
-    delete_p_list = []
-    e_points, n_e_points = detect_edge_points(points, 30, 5)
-   # print(e_points.shape[0], n_e_points.shape[0], points.shape[0])
+    if k > target + e_points.shape[0]:
+        k = target + e_points.shape[0]
+    if k <= 1:
+        k = 2
+
+    if k >= points.shape[0]:
+        k = points.shape[0] - 1
 
     all_neib, masks = getNeighbors(points, points, k, False, e_points)
+
     neib_idx = all_neib[n_e_points]
     masks = masks[n_e_points]
 
     normals = getNormals(points, 20, neib_idx)
     importance = calc_importance(points[neib_idx], points[n_e_points], normals, masks)
 
-    target = int((points.shape[0] * percent) / 100)
-    target -= e_points.shape[0]
-
-    percent_changed = False
-    while target <= 0:
-        percent_changed = True
-        percent+=1
-        target = int((points.shape[0] * percent) / 100)
-        target -= e_points.shape[0]
-    if percent_changed:
-        print('Процент сжатия сменен на', percent, '%')
-
-    print('Сообщение: В сжатом облаке будет', target + e_points.shape[0], 'точек и из них', e_points.shape[0],
-          'точек граничные.')
-    bar = Bar('Simplifying...', fill='#', suffix='%(percent)d%%')
-    source = n_e_points.shape[0] - target
-    progress = 1
-    count = 1
-    bar.goto(0)
     while n_e_points.shape[0] != target:
-        bar.goto(round((count/source)*100,2))
-       # if round((count/source)*100,2) >= progress:
-        #    bar.next()
-        #    progress+=1
+       # print(n_e_points.shape[0], ' != ', target)
 
         imp_id = np.argmin(importance)
         id = n_e_points[imp_id]
-        delete_p_list.append(id)
-        count+=1
 
         affected_p_1_idx = np.where(neib_idx == id)[0]
         affected_exist = False
@@ -148,6 +174,8 @@ def simplify(pcd, percent):
             affected_p_1_idx[affected_p_1_idx > imp_id] -= 1
 
         points = np.delete(points, id, axis=0)
+        if points.shape[0] <= 1:
+            break
         n_e_points = np.delete(n_e_points, imp_id)
         importance = np.delete(importance, imp_id)
         neib_idx = np.delete(neib_idx, imp_id, axis=0)
@@ -197,7 +225,6 @@ def simplify(pcd, percent):
             masks_ = masks1
             points_ = affected_p_1
             indexes = affected_p_1_idx
-
         prep_p1 = neibs.reshape(1, neibs.shape[0] * neibs.shape[1])[0]
         prep_p2 = all_neib[prep_p1]
         prep_p2 = prep_p2.reshape(1, prep_p2.shape[0] * prep_p2.shape[1])[0]
@@ -205,21 +232,23 @@ def simplify(pcd, percent):
         prep_p = np.append(prep_p, points_, axis=0)
         prep_p = np.unique(prep_p)
         prep_idx = (prep_p == neibs[..., None]).any(axis=1)
-        prep_p[prep_p > id] -= 1
+        prep_p[prep_p == points.shape[0]] -= 1
         normals_ = getNormals(points[prep_p], k - 1)
         normals = []
 
         for i in prep_idx:
             normals.append(normals_[i])
-
         imp = calc_importance(points[neibs], points[points_], np.asarray(normals), masks_)
         importance[indexes] = imp
 
-    bar.finish()
-   # print(time.time() - t)
-    #points = points.tolist()
-    #points.append(time.time() - t)
-    return [points, time.time() - t, percent]
+    delta = 1e-10
+    range_[:, 0] = range_[:, 0] - delta
+    range_[:, 1] = range_[:, 1] + delta
+
+    p = (points[:, 0] > range_[0, 0]) & (points[:, 0] < range_[0, 1]) & (points[:, 1] > range_[1, 0]) & (
+            points[:, 1] < range_[1, 1]) & (points[:, 2] > range_[2, 0]) & (points[:, 2] < range_[2, 1])
+    points = points[p]
+    return points
 
 
 def calc_importance(neighbors, points, normals, masks):
@@ -236,5 +265,69 @@ def calc_importance(neighbors, points, normals, masks):
     imp_val = np.sum(np.abs(np.sum(np.einsum('...ij,...ij->...ij', imp_val, normals), axis=2)), axis=1)
     importance[val1] = imp_val[val1]
     importance = importance / counts
-
     return np.asarray(importance)
+
+
+def simplify(pcd):
+    t = time.time()
+    p_thres_min = 3000
+    p_thres_max = 8000
+    X = np.asarray(pcd.points)
+    e_points, n_e_points = detect_edge_points(X, 30, 5)
+
+    n = X.shape[0]
+    range_ = np.array([X.min(axis=0), X.max(axis=0)]).T
+    GRID_NUM = round(n / p_thres_min)
+    VOLUMN = np.prod(range_[:, 1] - range_[:, 0])
+    GRID_LEN = np.cbrt(VOLUMN / GRID_NUM)
+    GRID_NUM = np.ceil((range_[:, 1] - range_[:, 0]) / GRID_LEN).astype(int)
+    GRID_LEN = (range_[:, 1] - range_[:, 0]) / GRID_NUM
+    m = 0
+    simpX = [[0, 0, 0]]
+
+    num_cycles = GRID_NUM[0] * GRID_NUM[1] * GRID_NUM[2]
+    bar = IncrementalBar('Simplifying...', max=num_cycles)
+    bar.goto(0)
+
+    for i in range(1, GRID_NUM[0] + 1):
+        x_min = range_[0, 0] + GRID_LEN[0] * (i - 1)
+        x_max = range_[0, 0] + GRID_LEN[0] * i
+        GRID_DELTA = GRID_LEN[0] * 0.1
+        tmpi = X[(X[:, 0] > (x_min - GRID_DELTA)) & (X[:, 0] < (x_max + GRID_DELTA))]
+        for j in range(1, GRID_NUM[1] + 1):
+            y_min = range_[1, 0] + GRID_LEN[1] * (j - 1)
+            y_max = range_[1, 0] + GRID_LEN[1] * j
+            GRID_DELTA = GRID_LEN[1] * 0.1
+            tmpj = tmpi[(tmpi[:, 1] > (y_min - GRID_DELTA)) & (tmpi[:, 1] < (y_max + GRID_DELTA))]
+            for k in range(1, GRID_NUM[2] + 1):
+                z_min = range_[2, 0] + GRID_LEN[2] * (k - 1)
+                z_max = range_[2, 0] + GRID_LEN[2] * k
+                GRID_DELTA = GRID_LEN[2] * 0.1
+                tmpk = tmpj[(tmpj[:, 2] > (z_min - GRID_DELTA)) & (tmpj[:, 2] < (z_max + GRID_DELTA))]
+                tmprange = np.array([[x_min, x_max], [y_min, y_max], [z_min, z_max]])
+
+                if len(tmpk):
+                    if len(tmpk) > p_thres_max:
+                        grid_X, grid_range, grid_len = divide(tmpk, p_thres_min, tmprange)
+                        for p in range(grid_len):
+                            tmpk = np.array(grid_X[p])
+                            mask = np.isin(tmpk, X[e_points])
+                            mask = np.logical_and(np.logical_and(mask[:, 0], mask[:, 1]), mask[:, 2])
+                            mask_n_e = np.arange(mask.shape[0])[np.logical_not(mask)]
+                            mask_e = np.arange(mask.shape[0])[mask]
+                            tmp = simplify_cube(tmpk, mask_n_e, mask_e, np.array(grid_range[p]).reshape(3, 2))
+                            simpX = np.append(simpX, tmp, axis=0)
+                    else:
+                        #print(np.asarray(X[n_e_points][np.where(np.isin(X[n_e_points],tmpk) == [True,True,True] )[0]]).shape[0])
+                        mask = np.isin(tmpk,X[e_points])
+                        mask = np.logical_and(np.logical_and(mask[:,0],mask[:,1]),mask[:,2])
+                        mask_n_e = np.arange(mask.shape[0])[np.logical_not(mask)]
+                        mask_e = np.arange(mask.shape[0])[mask]
+
+                        tmp = simplify_cube(tmpk, mask_n_e, mask_e,tmprange)
+                        simpX = np.append(simpX, tmp, axis=0)
+                bar.next()
+
+    bar.finish()
+    simpX = np.delete(simpX, 0, axis=0)
+    return [simpX, time.time() - t]

@@ -11,7 +11,7 @@ def simplify(alpha, lambda_, k, X, range_):
         simpX = X
     else:
         k = min(k, n - 1)
-        L = np.zeros((n, n))
+        L = np.zeros((n, n)) # матрица W - веса
         A = np.zeros((n, n))
         sigma = 0
         for i in range(0, n):
@@ -129,8 +129,6 @@ def gridding(pcd):
 
     num_cycles = GRID_NUM[0]*GRID_NUM[1]*GRID_NUM[2]
     bar = IncrementalBar('Simplifying...', max=num_cycles)
-    #print('num_cycles',num_cycles)
-    counter = 1
     bar.goto(0)
 
     for i in range(1, GRID_NUM[0] + 1):

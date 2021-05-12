@@ -91,7 +91,7 @@ void MainWindow::setTreeWidget(){
     ui->treeWidget->setHeaderLabel("  ");
 }
 
-void MainWindow::simplifyPC(int percent){
+void MainWindow::simplifyPC(){
     auto selected_list = ui->treeWidget->selectedItems();
     if (selected_list.size()){
         auto item = selected_list.at(0);
@@ -105,7 +105,7 @@ void MainWindow::simplifyPC(int percent){
                 worker1->source_p = item_.source_cloud;
                 worker1->file_extention = item_.extension;
                 worker1->file_name = item_.name_source;
-                worker1->percent = percent;
+                worker1->type_method = 1;
                 ui->textEdit->append(time.currentTime().toString() + ": Simplification... File (" + item_.path_source + item_.name_source + item_.extension + ")");
                 ui->menuSimplify->setEnabled(false);
                 thread1->start();
@@ -116,31 +116,9 @@ void MainWindow::simplifyPC(int percent){
 }
 
 void MainWindow::simplifySecondMethod(){
-    simplifyPC(0);
+    simplifyPC();
 }
 
-void MainWindow::simplifyFirstMethod(int percent) {
-    auto selected_list = ui->treeWidget->selectedItems();
-    if (selected_list.size()){
-        auto item = selected_list.at(0);
-        int index = ui->treeWidget->indexOfTopLevelItem(item);
-        if (index == -1){
-            auto parent = item->parent();
-            if (ui->treeWidget->indexOfTopLevelItem(parent) != -1){
-                TreeItem & item_ = this->clouds_.at(ui->treeWidget->indexOfTopLevelItem(parent));
-                worker1->path_dir = current_dir + "/python";
-                worker1->path_file = item_.path_source;
-                worker1->source_p = item_.source_cloud;
-                worker1->file_extention = item_.extension;
-                worker1->file_name = item_.name_source;
-                worker1->percent = percent;
-                ui->textEdit->append(time.currentTime().toString() + ": Simplification... File (" + item_.path_source + item_.name_source + item_.extension + ")");
-                ui->menuSimplify->setEnabled(false);
-                thread1->start();
-            }
-        }
-    }
-}
 
 void MainWindow::simplificationFinished(/*QString path_file,MyArray points*/){
 
@@ -217,8 +195,8 @@ void MainWindow::setConnections(){
     connect(ui->actionSave, &QAction::triggered, this, &MainWindow::saveFile);
 
     connect(ui->actionSecond_method, &QAction::triggered, this, &MainWindow::simplifySecondMethod);
-    connect(ui->actionfirst_method, &QAction::triggered, percentform, &PercentForm::showPercentForm);
-    connect(percentform, SIGNAL(simplify(int)),this,SLOT(simplifyFirstMethod(int)));
+    connect(ui->actionfirst_method, &QAction::triggered, this, &MainWindow::simplifyPC);
+
 
     connect(ui->actionRMSE, &QAction::triggered, this, &MainWindow::showRMSEWindow);
     connect(ui->actionDensity,&QAction::triggered,densform,&DensityForm::showDensityForm);

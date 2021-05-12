@@ -24,35 +24,33 @@ if __name__ == '__main__':
     source = []
     target = []
     results = []
+    method = 0
     path_save = ' '
-    if len(sys.argv) == 2:
-        print("Сообщение: Сжатие вторым методом")
+    if len(sys.argv) == 3:
+        if int(sys.argv[2]) == 1:
+            print("Сообщение: Сжатие первым методом")
+            method = 1
+        elif int(sys.argv[2]) == 2:
+            print("Сообщение: Сжатие вторым методом")
+            method = 2
+        else:
+            sys.exit(1)
+
         pcd = o3d.io.read_point_cloud(sys.argv[1])
         if np.asarray(pcd.points).shape[0] == 0:
             print("Ошибка: Неверно указанный путь")
             sys.exit(1)
         source = np.asarray(pcd.points)
-        results = gridding(pcd)
+        if method == 1:
+            results = simplify(pcd)
+        else:
+            results = gridding(pcd)
+
         target = np.asarray(results[0])
         path_save = os.path.split(sys.argv[1])[0] + '/' + os.path.split(sys.argv[1])[1].split('.')[0] + '_simplified.' + \
                     os.path.split(sys.argv[1])[1].split('.')[1]
-
-    elif len(sys.argv) == 3:
-        print("Сообщение: Сжатие первым методом")
-        pcd = o3d.io.read_point_cloud(sys.argv[1])
-        if np.asarray(pcd.points).shape[0] == 0:
-            print("Ошибка: Неверно указанный путь")
-            sys.exit(1)
-        elif int(sys.argv[2]) <= 0 or int(sys.argv[2]) > 100:
-            print("Ошибка: Неверно указанный процент сжатия облака точек")
-            sys.exit(1)
-        source = np.asarray(pcd.points)
-        results = np.asarray(simplify(pcd, int(sys.argv[2])))
-        target = results[0]
-        sys.argv[2] = results[2]
-        path_save = os.path.split(sys.argv[1])[0] + '/' + os.path.split(sys.argv[1])[1].split('.')[0] + '_' + str(
-            int(sys.argv[2])) + '%.' + os.path.split(sys.argv[1])[1].split('.')[1]
     else:
+        print('Аругменты.','\n[1] Путь до облака точек','\n[2] Номер алгоритма (1 или 2)')
         sys.exit(1)
 
     print('Результаты.')

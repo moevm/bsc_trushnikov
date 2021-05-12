@@ -26,7 +26,7 @@ public:
 
     double time;
     double r;
-    int percent;
+    int type_method;
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr source;
     pcl::PointCloud<pcl::PointXYZ>::Ptr target;

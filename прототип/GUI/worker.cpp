@@ -114,22 +114,21 @@ void Worker::simplificate_method_1() {
     PyRun_SimpleString("import sys");
     std::string command = "sys.path.append(\"" +  path_dir.toStdString() + "\")";
     PyRun_SimpleString(command.c_str());
-    if(this->percent){
+
+    std::cout << this->type_method << " method" << std::endl;
+    if(this->type_method == 1){
         pName = PyUnicode_DecodeFSDefault("first_method");
         pModule = PyImport_Import(pName);
         pFunc = PyObject_GetAttrString(pModule, "simplify");
-        pArgs = PyTuple_New(2);
-        PyTuple_SetItem(pArgs, 0, PyUnicode_DecodeFSDefault(path_file.toStdString().c_str()));
-        PyTuple_SetItem(pArgs, 1, Py_BuildValue("i", this->percent));
     }
     else{
         pName = PyUnicode_DecodeFSDefault("second_method");
         pModule = PyImport_Import(pName);
         pFunc = PyObject_GetAttrString(pModule, "gridding");
-        pArgs = PyTuple_New(1);
-        PyTuple_SetItem(pArgs, 0, PyUnicode_DecodeFSDefault(path_file.toStdString().c_str()));
     }
 
+    pArgs = PyTuple_New(1);
+    PyTuple_SetItem(pArgs, 0, PyUnicode_DecodeFSDefault(path_file.toStdString().c_str()));
 
     PyObject * pResult = PyObject_CallObject(pFunc, pArgs);
     for(int i = 0; i < PyList_Size(pResult) - 1; ++i){
